@@ -7,16 +7,19 @@ const path = require("path");
 
 const PORT = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, "public");
-const gameFile = "naruto_shinobi_ultimeite_organizado.html";
+
+const gameFile = "naruto_shinobi_ultimate_duelos_codigo_organizado.html";
 
 const rooms = new Map();
 const clients = new Map();
 
 function makeCode() {
   let code;
+
   do {
     code = String(100000 + crypto.randomInt(900000));
   } while (rooms.has(code));
+
   return code;
 }
 
@@ -28,7 +31,9 @@ function send(ws, payload) {
 
 function broadcast(room, from, payload) {
   for (const client of room.players) {
-    if (client !== from) send(client, payload);
+    if (client !== from) {
+      send(client, payload);
+    }
   }
 }
 
@@ -40,7 +45,10 @@ function removeClient(ws) {
 
   if (room) {
     room.players.delete(ws);
-    broadcast(room, ws, { type: "opponent_disconnected" });
+
+    broadcast(room, ws, {
+      type: "opponent_disconnected"
+    });
 
     if (room.players.size === 0) {
       rooms.delete(info.code);
@@ -72,26 +80,36 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/health") {
     res.writeHead(200, {
-      "content-type": "application/json",
-      "access-control-allow-origin": "*"
+      "Content-Type": "application/json; charset=utf-8"
     });
 
     return res.end(JSON.stringify({
-      ok: true,
-      service: "Naruto Shinobi Ultimate multiplayer relay",
+      status: "online",
+      game: gameFile,
       rooms: rooms.size
     }));
   }
 
   let requestedPath = decodeURIComponent(url.pathname);
 
-  if (requestedPath === "/" || requestedPath === "/index.html") {
+  if (
+    requestedPath === "/" ||
+    requestedPath === "/index.html"
+  ) {
     requestedPath = "/" + gameFile;
   }
 
-  const filePath = path.resolve(publicDir, "." + requestedPath);
+  const filePath = path.resolve(
+    publicDir,
+    "." + requestedPath
+  );
 
-  if (!filePath.startsWith(publicDir + path.sep)) {
+  const relativePath = path.relative(publicDir, filePath);
+
+  if (
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath)
+  ) {
     res.writeHead(403);
     return res.end("Acesso negado.");
   }
@@ -99,17 +117,17 @@ const server = http.createServer((req, res) => {
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
       res.writeHead(404, {
-        "content-type": "text/plain; charset=utf-8"
+        "Content-Type": "text/plain; charset=utf-8"
       });
+
       return res.end("Arquivo não encontrado.");
     }
 
-    const contentType =
-      mimeTypes[path.extname(filePath).toLowerCase()] ||
-      "application/octet-stream";
+    const extension = path.extname(filePath).toLowerCase();
 
     res.writeHead(200, {
-      "content-type": contentType
+      "Content-Type":
+        mimeTypes[extension] || "application/octet-stream"
     });
 
     fs.createReadStream(filePath).pipe(res);
@@ -118,8 +136,9 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
-wss.on("connection", ws => {
-  ws.on("message", raw => {
+wss.on("connection", (ws) => {
+
+  ws.on("message", (raw) => {
     let msg;
 
     try {
@@ -140,6 +159,7 @@ wss.on("connection", ws => {
       }
 
       const code = makeCode();
+
       const room = {
         code,
         players: new Set([ws]),
@@ -147,7 +167,11 @@ wss.on("connection", ws => {
       };
 
       rooms.set(code, room);
-      clients.set(ws, { code, role: "host" });
+
+      clients.set(ws, {
+        code,
+        role: "host"
+      });
 
       return send(ws, {
         type: "room_created",
@@ -185,7 +209,11 @@ wss.on("connection", ws => {
       }
 
       room.players.add(ws);
-      clients.set(ws, { code, role: "guest" });
+
+      clients.set(ws, {
+        code,
+        role: "guest"
+      });
 
       send(ws, {
         type: "room_joined",
@@ -218,10 +246,16 @@ wss.on("connection", ws => {
       });
     }
 
-    if (["game_event", "ready", "leave_room", "ping"].includes(msg.type)) {
+    if (
+      ["game_event", "ready", "leave_room", "ping"]
+        .includes(msg.type)
+    ) {
       if (msg.type === "leave_room") {
         removeClient(ws);
-        return send(ws, { type: "room_left" });
+
+        return send(ws, {
+          type: "room_left"
+        });
       }
 
       broadcast(room, ws, {
@@ -233,9 +267,12 @@ wss.on("connection", ws => {
   });
 
   ws.on("close", () => removeClient(ws));
+
   ws.on("error", () => removeClient(ws));
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`NSU multiplayer server listening on ${PORT}`);
+  console.log(
+    `NSU multiplayer server listening on ${PORT}`
+  );
 });
